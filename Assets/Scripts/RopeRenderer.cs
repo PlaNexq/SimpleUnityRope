@@ -4,7 +4,7 @@ using System.Runtime.CompilerServices;
 using Unity.VisualScripting;
 using UnityEngine;
 
-public class RopeRenderer : MonoBehaviour, IRopeRenderer
+public class RopeRenderer : MonoBehaviour
 {
     public Transform[] RopeTransforms { get => _ropeTransforms; set => _ropeTransforms = value; }
     public Material Material { get => _material; set => _material = value; }
@@ -18,40 +18,68 @@ public class RopeRenderer : MonoBehaviour, IRopeRenderer
     [SerializeField] private Transform[] _ropeTransforms;
     [SerializeField] private Material _material;
 
-    private List<RopeNode> _ropeNodes;
+    private MeshRenderer meshRenderer;
+    private MeshFilter meshFilter;
+    private Mesh mesh;
 
+    private List<Vector3> _vertices;
+    private List<Vector3> _normals;
+    private List<int> _triangles;
+    private List<Vector2> _uvs;
 
     // Start is called before the first frame update
     void Start()
     {
-        MeshRenderer meshRenderer = gameObject.AddComponent<MeshRenderer>();
+        Setup();
+        CalcVertsAndNormals();
+        CalcTris();
+        CalcUVs();
+        UpdateMesh();
+    }
+
+    // Update is called once per frame
+    void Update()
+    {
+        CalcVertsAndNormals();
+        UpdateMesh();
+    }
+
+    private void Setup()
+    {
+        meshRenderer = gameObject.AddComponent<MeshRenderer>();
+        meshFilter = gameObject.AddComponent<MeshFilter>();
+        mesh = new Mesh();
         meshRenderer.sharedMaterial = _material;
+        meshFilter.mesh = mesh;
 
-        MeshFilter meshFilter = gameObject.AddComponent<MeshFilter>();
+        _vertices = new List<Vector3>(_details * _ropeTransforms.Length);
+        _normals = new List<Vector3>(_vertices.Capacity);
+        _triangles = new List<int>(6 * _vertices.Capacity);
+        _uvs = new List<Vector2>();
+    }
 
-        Mesh mesh = new Mesh();
-
-        _ropeNodes = new List<RopeNode>(_ropeTransforms.Length);
-        foreach (Transform ropeTrans in _ropeTransforms)
+    private void CalcVertsAndNormals()
+    {
+        _vertices.Clear();
+        _normals.Clear();
+        for (int i = 0; i < _ropeTransforms.Length; i++)
         {
-            RopeNode newNode = new RopeNode
+            for (int j = 0; j < _details; j++)
             {
-                transform = ropeTrans,
-            };
-            _ropeNodes.Add(newNode);
+                float poinRadians = j * (2 * Mathf.PI / _details);
+                Vector3 normal = new Vector3(Mathf.Cos(poinRadians), Mathf.Sin(poinRadians), 0);
+                Vector3 pos = normal * _radius + _ropeTransforms[i].position;
+
+                _vertices.Add(pos);
+                _normals.Add(normal);
+            }
         }
+    }
 
-        List<Vector3> vertices = new List<Vector3>(_ropeNodes.Count * _details);
-        for (int i = 0; i < _ropeNodes.Count; i++)
-        {
-            vertices.AddRange(GetCircleCoords(_ropeNodes[i]));
-        }
-        mesh.vertices = vertices.ToArray();
-
-        int[] triangles = new int[6 * _details * _ropeNodes.Count];
-
+    private void CalcTris()
+    {
         // iterate through all pairs of neighbouring nodes
-        for (int i = 0; i < _ropeNodes.Count - 1; i++)
+        for (int i = 0; i < _ropeTransforms.Length - 1; i++)
         {
             List<int> currentVertices = new List<int>(2 * _details);
 
@@ -62,62 +90,38 @@ public class RopeRenderer : MonoBehaviour, IRopeRenderer
                 currentVertices.Add(verticeIndex);
             }
 
-            // calculate all faces (pairs of triangles or quads) between two nodes
+            // calculate all faces between two nodes
             for (int j = 0; j < _details; j++)
             {
                 int offset = currentVertices.Capacity / 2,
                     topL = currentVertices[j + offset], topR = currentVertices[(j + 1) % offset + offset],
                     lowL = currentVertices[j], lowR = currentVertices[(j + 1) % offset];
 
-                triangles[i * 6 * _details + (j * 6)] = lowL;
-                triangles[i * 6 * _details + (j * 6 + 1)] = lowR;
-                triangles[i * 6 * _details + (j * 6 + 2)] = topL;
-
-                triangles[i * 6 * _details + (j * 6 + 3)] = topR;
-                triangles[i * 6 * _details + (j * 6 + 4)] = topL;
-                triangles[i * 6 * _details + (j * 6 + 5)] = lowR;
+                // calculate one quad
+                // i * 6 * _details + (j * 6 + num)
+                _triangles.Add(lowL);
+                _triangles.Add(lowR);
+                _triangles.Add(topL);
+                                   
+                _triangles.Add(topR);
+                _triangles.Add(topL);
+                _triangles.Add(lowR);
             }
 
             currentVertices.Clear();
         }
-
-        mesh.triangles = triangles;
-        meshFilter.mesh = mesh;
     }
 
-    // Update is called once per frame
-    void Update()
+    private void CalcUVs()
     {
 
     }
 
-    private Vector3[] GetCircleCoords(RopeNode node)
+    private void UpdateMesh()
     {
-        Vector3[] circleCoords = new Vector3[_details];
-        for (int i = 0; i < _details; i++)
-        {
-            float poinRadians = i * (2 * Mathf.PI / _details);
-            Vector3 coord = new Vector3(Mathf.Cos(poinRadians), Mathf.Sin(poinRadians), 0) * _radius + node.transform.position;
-            circleCoords[i] = coord;
-        }
-
-        return circleCoords;
-    }
-
-    void IRopeRenderer.Render()
-    {
-        throw new System.NotImplementedException();
-    }
-
-    struct RopeNode
-    {
-        public Transform transform;
-        public Vertice[] vertices;
-    }
-    struct Vertice
-    {
-        public Vector3 localPos;
-        public Vector3 normal;
-        public int index;
+        mesh.SetVertices(_vertices);
+        mesh.SetTriangles(_triangles, 0);
+        mesh.SetNormals(_normals);
+        mesh.SetUVs(0, _uvs);
     }
 }
