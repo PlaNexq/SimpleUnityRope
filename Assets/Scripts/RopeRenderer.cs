@@ -54,6 +54,7 @@ public class RopeRenderer : MonoBehaviour
         meshRenderer.sharedMaterial = _material;
         meshFilter.mesh = mesh;
 
+        _details++;
         _vertices = new List<Vector3>(new Vector3[_details * _ropeTransforms.Length]);
         _normals = new List<Vector3>(new Vector3[_vertices.Capacity]);
         _triangles = new List<int>(new int[6 * _vertices.Capacity]);
@@ -62,18 +63,22 @@ public class RopeRenderer : MonoBehaviour
 
     private void CalcVertsAndNormals()
     {
+        int index;
         for (int i = 0; i < _ropeTransforms.Length; i++)
         {
-            for (int j = 0; j < _details; j++)
+            for (int j = 0; j < _details - 1; j++)
             {
                 float poinRadians = j * (2 * Mathf.PI / _details);
                 Vector3 normal = new Vector3(Mathf.Cos(poinRadians), Mathf.Sin(poinRadians), 0);
                 Vector3 pos = normal * _radius + _ropeTransforms[i].position;
 
-                int index = i * _details + j;
+                index = i * _details + j;
                 _vertices[index] = pos;
                 _normals[index] = normal;
             }
+            index = (i + 1) * _details - 1;
+            _vertices[index] = _vertices[index - (_details - 1)];
+            _normals[index] = _normals[index - (_details - 1)];
         }
     }
 
@@ -92,11 +97,11 @@ public class RopeRenderer : MonoBehaviour
             }
 
             // calculate all faces between two nodes
-            for (int j = 0; j < _details; j++)
+            for (int j = 0; j < _details - 1; j++)
             {
                 int offset = currentVertices.Capacity / 2,
-                    topL = currentVertices[j + offset], topR = currentVertices[(j + 1) % offset + offset],
-                    lowL = currentVertices[j], lowR = currentVertices[(j + 1) % offset];
+                    topL = currentVertices[j + offset], topR = currentVertices[j + offset + 1],
+                    lowL = currentVertices[j], lowR = currentVertices[j + 1];
 
                 // calculate one quad
                 _triangles[i * 6 * _details + (j * 6)] = lowL;
@@ -116,7 +121,7 @@ public class RopeRenderer : MonoBehaviour
         {
             for (int j = 0; j < _details; j++)
             {
-                Vector2 uvValue = new Vector2( i/(float)(_ropeTransforms.Length - 1), j/(float)_details );
+                Vector2 uvValue = new Vector2( i/(float)(_ropeTransforms.Length - 1), j/(float)(_details - 1) );
 
                 int index = i * _details + j;
                 _uvs[index] = uvValue;
