@@ -1,8 +1,10 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using Unity.VisualScripting;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 public class RopeRenderer : MonoBehaviour
 {
@@ -52,16 +54,14 @@ public class RopeRenderer : MonoBehaviour
         meshRenderer.sharedMaterial = _material;
         meshFilter.mesh = mesh;
 
-        _vertices = new List<Vector3>(_details * _ropeTransforms.Length);
-        _normals = new List<Vector3>(_vertices.Capacity);
-        _triangles = new List<int>(6 * _vertices.Capacity);
-        _uvs = new List<Vector2>();
+        _vertices = new List<Vector3>(new Vector3[_details * _ropeTransforms.Length]);
+        _normals = new List<Vector3>(new Vector3[_vertices.Capacity]);
+        _triangles = new List<int>(new int[6 * _vertices.Capacity]);
+        _uvs = new List<Vector2>(new Vector2[_vertices.Capacity]); 
     }
 
     private void CalcVertsAndNormals()
     {
-        _vertices.Clear();
-        _normals.Clear();
         for (int i = 0; i < _ropeTransforms.Length; i++)
         {
             for (int j = 0; j < _details; j++)
@@ -70,8 +70,9 @@ public class RopeRenderer : MonoBehaviour
                 Vector3 normal = new Vector3(Mathf.Cos(poinRadians), Mathf.Sin(poinRadians), 0);
                 Vector3 pos = normal * _radius + _ropeTransforms[i].position;
 
-                _vertices.Add(pos);
-                _normals.Add(normal);
+                int index = i * _details + j;
+                _vertices[index] = pos;
+                _normals[index] = normal;
             }
         }
     }
@@ -98,23 +99,29 @@ public class RopeRenderer : MonoBehaviour
                     lowL = currentVertices[j], lowR = currentVertices[(j + 1) % offset];
 
                 // calculate one quad
-                // i * 6 * _details + (j * 6 + num)
-                _triangles.Add(lowL);
-                _triangles.Add(lowR);
-                _triangles.Add(topL);
-                                   
-                _triangles.Add(topR);
-                _triangles.Add(topL);
-                _triangles.Add(lowR);
-            }
+                _triangles[i * 6 * _details + (j * 6)] = lowL;
+                _triangles[i * 6 * _details + (j * 6 + 1)] = lowR;
+                _triangles[i * 6 * _details + (j * 6 + 2)] = topL;
 
-            currentVertices.Clear();
+                _triangles[i * 6 * _details + (j * 6 + 3)] = topR;
+                _triangles[i * 6 * _details + (j * 6 + 4)] = topL;
+                _triangles[i * 6 * _details + (j * 6 + 5)] = lowR;
+            }
         }
     }
 
     private void CalcUVs()
     {
+        for (int i = 0; i < _ropeTransforms.Length; i++)
+        {
+            for (int j = 0; j < _details; j++)
+            {
+                Vector2 uvValue = new Vector2( i/(float)(_ropeTransforms.Length - 1), j/(float)_details );
 
+                int index = i * _details + j;
+                _uvs[index] = uvValue;
+            }
+        }
     }
 
     private void UpdateMesh()
